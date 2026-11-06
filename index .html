@@ -1,0 +1,177 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Machine à clients</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+<style>
+*{box-sizing:border-box}body{margin:0;font-family:'DM Sans',system-ui,sans-serif;background:#F4F7F6;color:#16201D}
+.box{max-width:420px;margin:0 auto;padding:28px 20px}h1{font-size:26px;margin:4px 0 12px}.mut{color:#4A5753}
+label{display:block;font-size:14px;font-weight:500;margin:12px 0}
+input,select{display:block;width:100%;height:48px;margin-top:6px;border:1px solid #CBD5D1;border-radius:12px;padding:0 12px;font:inherit;background:#fff}
+.chk{display:flex;gap:10px;align-items:flex-start;font-weight:400}.chk input{width:22px;height:22px;margin:0;flex:none}
+.pb,.sb{display:block;width:100%;height:50px;border-radius:14px;font:inherit;font-weight:700;font-size:15px;margin-top:10px;text-align:center;text-decoration:none;cursor:pointer}
+a.pb{line-height:50px}.pb{background:#0B5A49;color:#fff;border:0}.sb{background:#fff;color:#16201D;border:1px solid #CBD5D1}
+.sm{display:inline-block;width:auto;height:40px;padding:0 14px;font-size:13px;margin:8px 8px 0 0}.err{color:#B42318;font-size:14px}
+header{display:flex;justify-content:space-between;align-items:center;padding:24px 20px 8px;max-width:560px;margin:0 auto}
+header small{display:block;color:#4A5753;font-size:13px}header b{font-size:22px}
+main,.tabs{max-width:560px;margin:0 auto;padding:0 20px}main{padding-bottom:40px}.tabs{display:flex;gap:8px;padding-bottom:12px}
+.tabs button,.chips button{height:44px;border:1px solid #CBD5D1;background:#fff;border-radius:12px;font:inherit;font-weight:500;color:#16201D;cursor:pointer}
+.tabs button{flex:1}.chips{display:flex;gap:8px;overflow-x:auto;padding:12px 0}.chips button{flex:none;padding:0 14px;height:40px;font-size:14px}
+.on{background:#0B5A49!important;color:#fff!important;border-color:#0B5A49!important}
+details.add{background:#fff;border:1px solid #E2E8E5;border-radius:14px;padding:12px 14px;margin-top:10px}summary{font-weight:700;cursor:pointer}
+.p{display:flex;gap:12px;background:#fff;border:1px solid #E2E8E5;border-radius:16px;padding:12px 14px;margin-bottom:10px}
+.av{width:44px;height:44px;border-radius:50%;background:#D5EAE3;color:#0B5A49;font-weight:700;display:flex;align-items:center;justify-content:center;flex:none}
+.n{flex:1;min-width:0}.n>div{display:flex;justify-content:space-between;align-items:center;gap:8px}.n p{margin:2px 0 0;font-size:14px;color:#4A5753}
+.r{font-size:13px!important;font-weight:500;color:#0B5A49!important}.r.due{color:#B42318!important;font-weight:700}
+.b{font-size:12px;font-weight:700;border-radius:20px;padding:3px 10px}.chaud{background:#B42318;color:#fff}.tiede{background:#FDEBC8;color:#7A4B00}.froid{background:#E3E8EF;color:#344054}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px}.s{background:#fff;border:1px solid #E2E8E5;border-radius:14px;padding:14px;display:flex;flex-direction:column}.s b{font-size:28px}.s span{font-size:13px;color:#4A5753}
+</style>
+</head>
+<body>
+<div id="app"></div>
+<script>
+// --- Réglages du projet Supabase (clé publique : sans danger dans une page web) ---
+const SB_URL="https://mypsjtjwgquuajdxcbfw.supabase.co";
+const SB_KEY="sb_publishable_BI5gVWm3Nkk2AGv9zI-4tg_XM0Z24Vi";
+const db=supabase.createClient(SB_URL,SB_KEY);
+
+const $=s=>document.querySelector(s),app=$("#app"),params=new URLSearchParams(location.search);
+const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const slugify=s=>s.normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase().replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"").slice(0,40);
+const TEMP={chaud:"Chaud",tiede:"Tiède",froid:"Froid"};
+let B=null,P=[],M={},tab="prospects",filtre="tous";
+
+// --- Page publique « Demander le prix » (ouverte par les clientes avec ?b=nom-de-la-boutique) ---
+async function pagePublique(slug){
+  const {data}=await db.rpc("mac_boutique_publique",{p_slug:slug});
+  if(!data){app.innerHTML=`<div class="box"><h1>Boutique introuvable</h1><p class="mut">Ce lien n’est plus valide.</p></div>`;return;}
+  app.innerHTML=`<div class="box"><p class="mut">${esc(data.nom)}</p><h1>Demander le prix</h1><form id="f">
+<label>Votre prénom<input name="nom" required maxlength="80" autocomplete="given-name"></label>
+<label>Votre numéro WhatsApp<input name="tel" type="tel" required inputmode="tel" autocomplete="tel" placeholder="Ex. 0991234567"></label>
+<label>Article qui vous intéresse<input name="article" required maxlength="200" placeholder="Ex. robe wax taille M"></label>
+<label>Quand en avez-vous besoin ?<select name="delai"><option value="aujourdhui">Aujourd’hui</option><option value="semaine" selected>Cette semaine</option><option value="regarde">Je regarde seulement</option></select></label>
+<label class="chk"><input type="checkbox" name="ok" required><span>J’accepte d’être contacté(e) sur WhatsApp par ${esc(data.nom)} au sujet de ma demande.</span></label>
+<button class="pb" id="go">Envoyer ma demande</button><p id="err" class="err"></p></form></div>`;
+  $("#f").onsubmit=async e=>{
+    e.preventDefault();const f=new FormData(e.target);$("#go").disabled=true;
+    const {data:r,error}=await db.rpc("mac_demander_prix",{p_slug:slug,p_nom:f.get("nom"),p_telephone:f.get("tel"),p_article:f.get("article"),p_delai:f.get("delai"),p_source:params.get("s")||"lien",p_consent:true});
+    if(error||!r||!r.ok){$("#err").textContent=r&&r.erreur==="telephone_invalide"?"Numéro invalide, vérifiez-le.":"Une erreur est survenue, réessayez.";$("#go").disabled=false;return;}
+    const txt=encodeURIComponent("Bonjour, je viens de demander le prix de « "+f.get("article")+" ».");
+    app.innerHTML=`<div class="box"><h1>Merci !</h1><p>Votre demande est envoyée à ${esc(r.boutique)}. Continuez sur WhatsApp pour obtenir une réponse rapide.</p><a class="pb" href="https://wa.me/${esc(r.whatsapp)}?text=${txt}">Ouvrir WhatsApp</a></div>`;
+  };
+}
+
+// --- Connexion du commerçant ---
+function pageConnexion(msg=""){
+  app.innerHTML=`<div class="box"><h1>Machine à clients</h1><p class="mut">Connectez-vous pour gérer vos prospects.</p><form id="f">
+<label>E-mail<input name="e" type="email" required autocomplete="email"></label>
+<label>Mot de passe<input name="p" type="password" required minlength="6" autocomplete="current-password"></label>
+<button class="pb">Se connecter</button><button type="button" class="sb" id="up">Créer mon compte</button><p id="err" class="err">${esc(msg)}</p></form></div>`;
+  const val=()=>({email:$("[name=e]").value.trim(),password:$("[name=p]").value});
+  $("#f").onsubmit=async e=>{e.preventDefault();const {error}=await db.auth.signInWithPassword(val());error?pageConnexion("E-mail ou mot de passe incorrect."):charger();};
+  $("#up").onclick=async()=>{
+    const v=val();if(!v.email||v.password.length<6){$("#err").textContent="Entrez un e-mail et un mot de passe (6 caractères minimum).";return;}
+    const {data,error}=await db.auth.signUp(v);if(error){$("#err").textContent=error.message;return;}
+    data.session?charger():pageConnexion("Compte créé. Confirmez votre e-mail, puis connectez-vous.");
+  };
+}
+
+// --- Création de la boutique (une seule fois) ---
+function pageBoutique(msg=""){
+  app.innerHTML=`<div class="box"><h1>Votre boutique</h1><form id="f">
+<label>Nom de la boutique<input name="n" required maxlength="80"></label>
+<label>Numéro WhatsApp de la boutique<input name="w" type="tel" required placeholder="Ex. 0991234567"></label>
+<button class="pb">Créer ma boutique</button><p class="err">${esc(msg)}</p></form></div>`;
+  $("#f").onsubmit=async e=>{
+    e.preventDefault();const n=$("[name=n]").value.trim(),w=$("[name=w]").value;let slug=slugify(n);if(slug.length<3)slug+="-shop";
+    let {error}=await db.from("mac_boutiques").insert({nom:n,slug,whatsapp:w});
+    if(error&&error.code==="23505"){({error}=await db.from("mac_boutiques").insert({nom:n,slug:slug.slice(0,35)+"-"+Math.floor(100+Math.random()*900),whatsapp:w}));}
+    error?pageBoutique("Création impossible : "+error.message):charger();
+  };
+}
+
+// --- Application du commerçant ---
+const lien=()=>location.origin+location.pathname+"?b="+B.slug;
+const due=p=>p.statut==="nouveau"&&p.prochaine_relance&&new Date(p.prochaine_relance)<=new Date();
+const init=n=>(n||"?").trim().split(/\s+/).map(x=>x[0]).join("").slice(0,2).toUpperCase();
+
+async function charger(){
+  const {data:b}=await db.from("mac_boutiques").select("*").limit(1);
+  if(!b||!b.length)return pageBoutique();
+  B=b[0];
+  const [p,m]=await Promise.all([
+    db.from("mac_prospects").select("*").in("statut",["nouveau","en_discussion"]).order("created_at",{ascending:false}),
+    db.from("mac_modeles_relance").select("etape,texte").eq("boutique_id",B.id)]);
+  P=p.data||[];M={};(m.data||[]).forEach(x=>{M[x.etape]=x.texte;});
+  vue();
+}
+
+function carte(p){
+  const d=due(p);
+  const info=p.statut!=="nouveau"?"En discussion":d?"Relance à faire maintenant":p.prochaine_relance?"Prochaine relance : "+new Date(p.prochaine_relance).toLocaleDateString("fr-FR",{day:"numeric",month:"short"}):"Relances terminées";
+  return `<div class="p"><div class="av">${esc(init(p.nom))}</div><div class="n"><div><b>${esc(p.nom||"Sans nom")}</b><span class="b ${p.temperature}">${TEMP[p.temperature]}</span></div>
+<p>${esc(p.article||"")}</p><p class="r${d?" due":""}">${info}</p>
+<div>${p.nb_relances<3&&p.statut==="nouveau"?`<button class="pb sm" data-a="rel" data-id="${p.id}">Relancer</button>`:""}${p.statut==="nouveau"?`<button class="sb sm" data-a="rep" data-id="${p.id}">Elle a répondu</button>`:""}<button class="sb sm" data-a="ven" data-id="${p.id}">Vendu</button><button class="sb sm" data-a="per" data-id="${p.id}">Perdu</button></div></div></div>`;
+}
+
+function vue(){
+  const n={chaud:0,tiede:0,froid:0};P.forEach(p=>{n[p.temperature]++;});
+  app.innerHTML=`<header><div><small>Machine à clients</small><b>${esc(B.nom)}</b></div><button class="sb sm" id="out">Quitter</button></header>
+<div class="tabs"><button data-t="prospects" class="${tab==="prospects"?"on":""}">Prospects</button><button data-t="rapport" class="${tab==="rapport"?"on":""}">Rapport</button></div><main id="m"></main>`;
+  app.querySelectorAll("[data-t]").forEach(b=>{b.onclick=()=>{tab=b.dataset.t;vue();};});
+  $("#out").onclick=async()=>{await db.auth.signOut();pageConnexion();};
+  if(tab==="rapport")return rapport();
+  const F=[["tous","Tous ("+P.length+")"],["due","À relancer ("+P.filter(due).length+")"],["chaud","Chauds ("+n.chaud+")"],["tiede","Tièdes ("+n.tiede+")"],["froid","Froids ("+n.froid+")"]];
+  const L=P.filter(p=>filtre==="tous"||(filtre==="due"?due(p):p.temperature===filtre)).sort((a,b)=>due(b)-due(a)||new Date(b.created_at)-new Date(a.created_at));
+  $("#m").innerHTML=`<button class="sb" id="lk">Copier mon lien « Demander le prix »</button>
+<details class="add"><summary>+ Ajouter un prospect</summary><form id="af"><label>Prénom et nom<input name="n"></label><label>Numéro WhatsApp<input name="t" type="tel" required></label><label>Article demandé<input name="a"></label><button class="pb">Enregistrer</button></form></details>
+<div class="chips">${F.map(([k,t])=>`<button data-f="${k}" class="${filtre===k?"on":""}">${t}</button>`).join("")}</div>
+${L.map(carte).join("")||`<p class="mut">Aucun prospect ici pour le moment. Partagez votre lien « Demander le prix » sur vos posts.</p>`}`;
+  $("#lk").onclick=async()=>{try{await navigator.clipboard.writeText(lien());$("#lk").textContent="Lien copié !";}catch(e){prompt("Copiez ce lien",lien());}};
+  $("#af").onsubmit=async e=>{
+    e.preventDefault();const f=new FormData(e.target);
+    const {error}=await db.from("mac_prospects").insert({boutique_id:B.id,nom:f.get("n")||null,telephone:f.get("t"),article:f.get("a")||null,source:"manuel"});
+    error?alert("Numéro invalide ou enregistrement impossible."):charger();
+  };
+  $("#m").querySelectorAll("[data-f]").forEach(b=>{b.onclick=()=>{filtre=b.dataset.f;vue();};});
+  $("#m").querySelectorAll("[data-a]").forEach(b=>{b.onclick=()=>agir(b.dataset.a,b.dataset.id);});
+}
+
+async function agir(a,id){
+  const p=P.find(x=>x.id===id);if(!p)return;
+  if(a==="rel"){
+    const et=[1,3,7][p.nb_relances];if(!et)return;
+    const txt=(M[et]||"").replaceAll("{prenom}",(p.nom||"").split(" ")[0]).replaceAll("{article}",p.article||"l’article").replaceAll("{boutique}",B.nom);
+    window.open("https://wa.me/"+p.telephone+"?text="+encodeURIComponent(txt),"_blank");
+    await db.from("mac_relances").insert({prospect_id:id,etape:et});
+  }else if(a==="rep"){await db.from("mac_prospects").update({statut:"en_discussion"}).eq("id",id);}
+  else if(a==="ven"){
+    const m=prompt("Montant de la vente (laisser vide si inconnu)");if(m===null)return;
+    await db.from("mac_prospects").update({statut:"vendu",montant_vente:Number(m.replace(",","."))||null}).eq("id",id);
+  }else if(a==="per"){
+    if(!confirm("Marquer ce prospect comme perdu ?"))return;
+    await db.from("mac_prospects").update({statut:"perdu"}).eq("id",id);
+  }
+  charger();
+}
+
+async function rapport(){
+  const {data}=await db.from("mac_stats").select("*").limit(1);const s=(data&&data[0])||{};
+  $("#m").innerHTML=`<div class="grid">
+<div class="s"><b>${s.prospects_7j||0}</b><span>Nouveaux prospects (7 jours)</span></div>
+<div class="s"><b>${s.ventes_7j||0}</b><span>Ventes (7 jours)</span></div>
+<div class="s"><b>${s.ca_7j||0}</b><span>Montant des ventes (7 jours)</span></div>
+<div class="s"><b>${(s.chauds||0)}</b><span>Prospects chauds à suivre</span></div></div>`;
+}
+
+(async()=>{
+  const slug=params.get("b");if(slug)return pagePublique(slug);
+  const {data}=await db.auth.getSession();
+  data.session?charger():pageConnexion();
+})();
+</script>
+</body>
+</html>
